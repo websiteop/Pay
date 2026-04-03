@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pay</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        #payment-section {
+            display: none; /* Hidden until QR is scanned */
+            width: 100%;
+            max-width: 350px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-top: 20px;
+        }
+        h2 {
+            color: #333;
+            font-size: 1.2rem;
+        }
+        input[type="number"] {
+            width: 90%;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 1.2rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            text-align: center;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Scan Payment QR</h2>
+    
+    <div id="reader"></div>
+
+    <div id="payment-section">
+        <h2>Paying: <span id="payee-name" style="color: #0056b3;"></span></h2>
+        <input type="number" id="amount" placeholder="Enter Amount (₹)" step="1" min="1">
+        <button onclick="openPaymentApp()">Proceed to Pay</button>
+    </div>
+
+    <script>
+        let scannedUPIUrl = "";
+        const html5QrCode = new Html5Qrcode("reader");
+
+        // Function that runs when a QR code is successfully read
+        function onScanSuccess(decodedText, decodedResult) {
+            // 1. Check if the scanned text is a valid UPI link
+            if (decodedText.startsWith("upi://pay")) {
+                scannedUPIUrl = decodedText;
+
+                // 2. Stop the camera to save battery and freeze UI
+                html5QrCode.stop().then(() => {
+                    document.getElementById("reader").style.display = "none";
+                }).catch(err => console.error("Failed to stop camera.", err));
+
+                // 3. Parse the UPI link to get the name
+                try {
+                    let url = new URL(decodedText);
+                    let payeeName = url.searchParams.get("pn"); // 'pn' stands for Payee Name
+
+                    if (payeeName) {
+                        // Decode URI component replaces %20 with spaces
+                        document.getElementById("payee-name").innerText = decodeURIComponent(payeeName); 
+                    } else {
+                        document.getElementById("payee-name").innerText = "Unknown Merchant";
+                    }
+
+                    // 4. Show the payment form
+                    document.getElementById("payment-section").style.display = "block";
+
+                } catch (e) {
+                    alert("Could not read QR code details.");
+                }
+            } else {
+                alert("This is not a valid Payment QR code. Keep scanning.");
+            }
+        }
+
+        // Configuration to start the camera automatically
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        
+        // Start camera (facingMode: "environment" forces the back camera on mobile)
+        html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess)
+        .catch(err => {
+            console.error(err);
+            alert("Camera access denied or not supported by your browser.");
+        });
+
+        // Function that runs when the user clicks "Proceed to Pay"
+        function openPaymentApp() {
+            let amount = document.getElementById("amount").value;
+            
+            if (!amount || amount <= 0) {
+                alert("Please enter a valid amount.");
+                return;
+            }
+
+            // Parse the original scanned URL
+            let paymentUrl = new URL(scannedUPIUrl);
+            
+            // Add the amount ('am') and currency ('cu') parameters
+            paymentUrl.searchParams.set("am", amount);
+            paymentUrl.searchParams.set("cu", "INR"); 
+
+            // Redirect the browser to the deep link
+            // Mobile operating systems will intercept this and open GPay, PhonePe, Paytm, etc.
+            window.location.href = paymentUrl.toString();
+        }
+    </script>
+</body>
+</html>
